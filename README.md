@@ -1,4 +1,5 @@
-This repo contains the content of the final project of the course Practical Machine Learning offered at JHU.
+## Content
+This repo contains the content of the final project of the course Practical Machine Learning offered by JHU through Coursera.
 
 ## Background
 
