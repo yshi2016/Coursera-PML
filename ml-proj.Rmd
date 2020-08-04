@@ -1,0 +1,107 @@
+---
+title: "ML-Project"
+author: "Yiwen Shi"
+date: "8/2/2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+### Load Data
+```{r}
+library(caret)
+#training set
+train <- read.csv("pml-training.csv", stringsAsFactors = F)
+#test set
+test <- read.csv("pml-testing.csv",stringsAsFactors = )
+```
+
+### Pre-process
+```{r}
+#remove columns with missing values > 10 %
+count_na = nrow(train) * 0.1
+cols_rm <- which(colSums(is.na(train) | train==""|train == "#DIV/0!") > count_na)
+train = train[,-cols_rm]
+test = test[,-cols_rm]
+#remove timestamps
+train <- train[,-(1:5) ]
+test <- test[,-(1:5) ]
+train_labels = as.factor(train$classe)
+test_labels = as.factor(test$classe)
+#near zero variance
+nzvs <- nearZeroVar(train, saveMetrics = TRUE)
+train <- train[, !nzvs$nzv]
+test <- test[, !nzvs$nzv]
+```
+
+
+### EDA
+
+Creat data partitions first, then analyze training set
+```{r}
+set.seed(123)
+part_inds <- createDataPartition(y=train_labels, p=0.7, list=FALSE)
+train_set <- train[part_inds, ]
+test_set <- train[-part_inds, ]
+train_set_labels = train_labels[part_inds]
+test_set_labels = train_labels[-part_inds]
+```
+
+```{r}
+library(corrplot)
+#visualize correlations among potential predictor variables
+corrplot(cor(train_set[,-length(colnames(train_set))]), method = "color", tl.cex = 0.5)
+cor_df = as.data.frame(cor(train_set[,-length(colnames(train_set))]))
+cor_label = as.data.frame(cor(train_set[,-length(colnames(train_set))], as.numeric(train_set_labels)))
+```
+
+Find some variables with higher correlations
+```{r}
+high_cor_labels = rownames(cor_label)[abs(cor_label) >= 0.2]
+high_cor_values = cor_label[abs(cor_label) >= 0.2]
+high_cor_matrix = cor_df[high_cor_labels,high_cor_labels]
+#some of these variables are highly correlated with each other
+high_cor_matrix
+```
+
+
+```{r}
+library(ggplot2)
+qplot(train_set$accel_arm_x, train_set$magnet_arm_x, colour=train_set$classe)
+```
+
+### Modeling
+
+Use all variables, fit a tree since multi-class, with cross validation
+```{r}
+train_set$classe = as.factor(train_set$classe)
+test_set$classe = as.factor(test_set$classe)
+tree = train(classe ~ ., 
+                  data=train_set, 
+                  method="rpart", 
+                  trControl = trainControl(method = "cv"))
+library(rpart)
+plot(tree)
+predictTree <- predict(tree, test_set,type = "raw")
+confusionMatrix(test_set$classe, predictTree)
+```
+
+```{r}
+forest = train(classe ~ ., data = train_set, method = "rf", trControl = trainControl(method = "cv", 5), ntree = 100)
+forest
+```
+```{r}
+predictRF <- predict(forest, test_set,type = "raw")
+confusionMatrix(test_set$classe, predictRF)
+```
+
+Random Forest achieves very high accuracy
+
+### Prediction on the actual test set
+```{r}
+predict(forest, test[, -length(colnames(test))])
+```
+
